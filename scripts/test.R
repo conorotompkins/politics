@@ -14,6 +14,7 @@ head(states)
 
 states <- cbind(states, st_coordinates(st_centroid(states)))
 
+#state abbreviations from https://www.infoplease.com/state-abbreviations-and-state-postal-codes
 state_abbreviations <- read_csv("data/state_abbreviations.csv") %>% 
   clean_names() %>% 
   mutate(state_district = tolower(state_district)) %>% 
@@ -90,15 +91,3 @@ ggraph(manual_layout) +
                 color = "blue") +
   scale_edge_width_continuous(range = c(.3, 2)) +
   scale_edge_alpha_continuous(range = c(.1, 1))
-
-
-
-  scale_edge_width_continuous(range = c(0.5, 2),             # scale for edge widths
-                              guide = FALSE) +
-  geom_node_point(aes(size = weight), shape = 21,            # draw nodes
-                  fill = "white", color = "black",
-                  stroke = 0.5) +
-  scale_size_continuous(range = c(1, 6), guide = FALSE) +    # scale for node sizes
-  geom_node_text(aes(label = name), repel = TRUE, size = 3,
-                 color = "white", fontface = "bold") +
-  mapcoords + maptheme
