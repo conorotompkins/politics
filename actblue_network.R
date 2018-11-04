@@ -9,7 +9,8 @@ df
 
 df %>%
   select(-`X1`) %>% 
-  mutate(sum = sum / 1000000) %>% 
+  mutate(sum = sum / 10^6,
+         dollar_per_contribution = sum/count) %>% 
   na.omit() %>% 
   filter(!(contributor_state == recipient_state)) %>% 
   filter(sum > .25) %>% 
