@@ -24,17 +24,9 @@ state_abbreviations <- read_csv("data/state_abbreviations.csv") %>%
 states <- states %>% 
   left_join(state_abbreviations, by = c("ID" = "state_district")) %>% 
   arrange(abbr)
-  #select(-ID) %>% 
-  #rename(ID = abbr) %>% 
-
-
-
-
 
 df <- read_csv("https://raw.githubusercontent.com/PublicI/actblue-analysis/master/data/actblue_states.csv")
-#df %>% 
-#  right_join(states, by = c("contributor_state" = "abbr")) %>% 
-#  right_join(states %>% select(-c(ID, X, Y)), by = c("recipient_state" = "abbr")) -> df
+
 df %>% 
   semi_join(states, by = c("contributor_state" = "abbr")) %>% 
   semi_join(states, by = c("recipient_state" = "abbr")) -> df
@@ -54,40 +46,48 @@ states %>%
   geom_sf() +
   geom_point(aes(X, Y))
 
-
-
 df %>%
   select(-`X1`) %>% 
   arrange(contributor_state, recipient_state) %>% 
   mutate(sum = sum / 10^6,
-         dollar_per_contribution = sum/count) %>% 
+         sum = round(sum, digits = 2)) %>% 
   na.omit() %>% 
-  filter(!(contributor_state == recipient_state)) %>% 
-  #filter(sum > .25) %>% 
-  #filter(contributor_state %in% c("PA", "WI")) %>% 
+  filter(!(contributor_state == recipient_state)) -> df_intermediate
+
+df_intermediate %>% 
   as_tbl_graph(directed = TRUE) -> g
-g
+
+threshhold <- 1
+
+g %>% 
+  activate(edges) %>% 
+  filter(sum >= 1) -> g
 
 node_pos <- states %>%
   select(abbr, X, Y) %>%
   rename(x = X, y = Y) %>%  # node positions must be called x, y
   st_set_geometry(NULL)
+str(node_pos)
+
 lay <- create_layout(g, 'manual',
                      node.positions = node_pos)
-#assert_that(nrow(lay) == nrow(nodes))
 
 manual_layout <- create_layout(graph = g,
                                layout = "manual", node.positions = node_pos)
 
-
 ggraph(manual_layout) +
   geom_sf(data = states) +
-  #geom_label_repel(data = states, aes(X, Y, label = abbr)) +
   geom_node_label(aes(label = name),repel = FALSE) +
   geom_edge_fan(aes(edge_width = sum, edge_alpha = sum),
                 arrow = arrow(length = unit(4, 'mm')), 
                 start_cap = circle(3, 'mm'),
                 end_cap = circle(3, 'mm'),
                 color = "blue") +
-  scale_edge_width_continuous(range = c(.3, 2)) +
-  scale_edge_alpha_continuous(range = c(.1, 1))
+  scale_edge_width_continuous("Donations in millions USD", range = c(.3, 2)) +
+  scale_edge_alpha_continuous("Donations in millions USD", range = c(.1, 1)) +
+  labs(title = "ActBlue Political Donations",
+       subtitle = str_c("Aggregate interstate donations greater than $", threshhold, " million USD"),
+       caption = "@conorotompkins, data from Center for Public Integrity and 538") +
+  theme(panel.grid.major = element_line(colour = 'transparent')) -> p
+
+p
