@@ -24,23 +24,12 @@ state_abbreviations <- read_csv("data/state_abbreviations.csv") %>%
 states <- states %>% 
   left_join(state_abbreviations, by = c("ID" = "state_district")) %>% 
   arrange(abbr)
-#select(-ID) %>% 
-#rename(ID = abbr) %>% 
-
-
-
-
 
 df <- read_csv("https://raw.githubusercontent.com/PublicI/actblue-analysis/master/data/actblue_states.csv")
-#df %>% 
-#  right_join(states, by = c("contributor_state" = "abbr")) %>% 
-#  right_join(states %>% select(-c(ID, X, Y)), by = c("recipient_state" = "abbr")) -> df
+
 df %>% 
   semi_join(states, by = c("contributor_state" = "abbr")) %>% 
-  semi_join(states, by = c("recipient_state" = "abbr")) %>% 
-  filter(contributor_state == "CA") %>% 
-  arrange(recipient_state) -> df
-
+  semi_join(states, by = c("recipient_state" = "abbr")) -> df
 df %>% 
   select(-c(X1, count, sum)) %>% 
   gather(state_type, state_name) %>% 
@@ -49,7 +38,7 @@ df %>%
   summarize(n = n())
 
 states %>% 
-  #semi_join(df, by = c("abbr" = "contributor_state")) %>% 
+  semi_join(df, by = c("abbr" = "contributor_state")) %>% 
   semi_join(df, by = c("abbr" = "recipient_state"))  -> states
 
 states %>% 
@@ -57,29 +46,41 @@ states %>%
   geom_sf() +
   geom_point(aes(X, Y))
 
-
-
 df %>%
   select(-`X1`) %>% 
   arrange(contributor_state, recipient_state) %>% 
   mutate(sum = sum / 10^6,
-         sum = round(sum, digits = 1)) %>% 
+         sum = round(sum, digits = 2)) %>% 
   na.omit() %>% 
-  filter(!(contributor_state == recipient_state)) -> df_test 
+  filter(!(contributor_state == recipient_state)) -> df_intermediate
 
-  #filter(sum > .25) %>% 
-  #filter(contributor_state %in% c("PA", "WI")) %>% 
-df_test %>% 
+df_intermediate %>% 
   as_tbl_graph(directed = TRUE) -> g
-g
+
+g %>% 
+  activate(nodes) %>% 
+  as_tibble() %>% 
+  mutate(index = row_number()) -> state_nodes
+
+from_state <- "CA"
+
+from_state_index <- state_nodes %>% 
+  filter(name == from_state) %>% 
+  select(index) %>% 
+  unlist()
+  
+g %>% 
+  activate(edges) %>% 
+  filter(from == from_state_index) -> g
 
 node_pos <- states %>%
   select(abbr, X, Y) %>%
   rename(x = X, y = Y) %>%  # node positions must be called x, y
   st_set_geometry(NULL)
+str(node_pos)
+
 lay <- create_layout(g, 'manual',
                      node.positions = node_pos)
-#assert_that(nrow(lay) == nrow(nodes))
 
 manual_layout <- create_layout(graph = g,
                                layout = "manual", node.positions = node_pos)
@@ -94,5 +95,11 @@ ggraph(manual_layout) +
                 start_cap = circle(3, 'mm'),
                 end_cap = circle(3, 'mm'),
                 color = "blue") +
-  scale_edge_width_continuous(range = c(.3, 2)) +
-  scale_edge_alpha_continuous(range = c(.1, 1))
+  scale_edge_width_continuous("Donations in millions USD", range = c(.3, 2)) +
+  scale_edge_alpha_continuous("Donations in millions USD", range = c(.1, 1)) +
+  labs(title = "ActBlue Political Donations",
+       subtitle = str_c("Aggregate interstate donations from ", from_state),
+       caption = "@conorotompkins, data from Center for Public Integrity and 538") +
+  theme(panel.grid.major = element_line(colour = 'transparent')) -> p
+
+p
