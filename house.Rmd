@@ -1,0 +1,105 @@
+---
+title: "congress_house"
+author: "Conor Tompkins"
+date: "November 26, 2018"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(jsonlite)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+url <- "https://theunitedstates.io/congress-legislators/legislators-historical.json"
+```
+
+```{r}
+data <- fromJSON(url, flatten = TRUE)
+data
+#str(data)
+
+#data[[6]] %>% 
+#  View()
+
+df <- data %>% 
+  unnest(terms)
+
+df %>% 
+  count(id.wikipedia, sort = TRUE)
+
+df <- df %>% 
+  mutate_at(vars(start, end, bio.birthday), ymd)
+
+df %>%
+  count(state, sort = TRUE)
+
+df %>% 
+  count(bio.gender, sort = TRUE)
+
+df %>% 
+  count(bio.religion, sort = TRUE)
+
+df %>% 
+  mutate(bio.birthday = yday(bio.birthday)) %>% 
+  ggplot(aes(bio.birthday)) +
+  geom_density(fill = "grey")
+
+df %>%
+  count(class, sort = TRUE)
+
+df %>% 
+  count(party, sort = TRUE)
+
+df %>% 
+  count(district, sort = TRUE)
+
+df %>% 
+  count(how, sort = TRUE)
+```
+
+```{r}
+sessions <- df %>%
+  select(type, start) %>% 
+  arrange(type, start) %>% 
+  count(type, start) %>% 
+  filter(n > 3) %>%
+  group_by(type) %>% 
+  mutate(session = dense_rank(start)) %>% 
+  select(-n)
+
+df <- df %>% 
+  left_join(sessions)
+
+districts <- df %>%
+  select(state, district) %>% 
+  distinct() %>% 
+  arrange(state, district)
+```
+
+```{r}
+df_pa <- df %>%
+  filter(type == "rep",
+         state == "PA") %>% 
+  select(start, session, type, state, district, party, name.official_full) %>% 
+  arrange(session, district) %>% 
+  complete(session, state, district)
+  #replace_na(list(district = "NA")) %>% 
+  #arrange(state, desc(district)) %>% 
+  #mutate(state_district = str_c(state, district),
+  #       state_district = as.factor(state_district)) %>% 
+df_pa %>% 
+  filter(session >= 100) %>% 
+  ggplot(aes(session, district, fill = party)) +
+  geom_tile() +
+  #guides(fill = FALSE) +
+  #theme(panel.grid.major.x = element_blank()) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0))
+
+
+```
+
