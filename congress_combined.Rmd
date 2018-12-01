@@ -1,0 +1,129 @@
+---
+title: "congress_house"
+author: "Conor Tompkins"
+date: "November 26, 2018"
+output: html_document
+---
+
+#https://github.com/unitedstates/congress-legislators/blob/master/README.md
+```{r}
+library(tidyverse)
+library(jsonlite)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+url_historical_congress <- "https://theunitedstates.io/congress-legislators/legislators-historical.json"
+
+url_current_congress <- "https://theunitedstates.io/congress-legislators/legislators-current.json"
+```
+
+```{r}
+data_historical <- fromJSON(url_historical_congress, flatten = TRUE) %>% 
+  unnest(terms)
+data_current <- fromJSON(url_current_congress, flatten = TRUE) %>% 
+  unnest(terms)
+
+df <- bind_rows(data_historical, data_current)
+
+df
+```
+
+```{r}
+df %>% 
+  count(id.wikipedia, sort = TRUE)
+
+df <- df %>% 
+  mutate_at(vars(start, end, bio.birthday), ymd)
+
+df %>%
+  count(state, sort = TRUE)
+
+df %>% 
+  count(bio.gender, sort = TRUE)
+
+df %>% 
+  count(bio.religion, sort = TRUE)
+
+df %>% 
+  mutate(bio.birthday = yday(bio.birthday)) %>% 
+  ggplot(aes(bio.birthday)) +
+  geom_density(fill = "grey")
+
+df %>%
+  count(class, sort = TRUE)
+
+df %>% 
+  count(party, sort = TRUE)
+
+df %>% 
+  count(district, sort = TRUE)
+
+df %>% 
+  count(how, sort = TRUE)
+```
+
+```{r}
+sessions <- df %>%
+  select(type, start) %>% 
+  arrange(type, start) %>% 
+  count(type, start) %>% 
+  filter(n > 3) %>%
+  group_by(type) %>% 
+  mutate(session = dense_rank(start)) %>% 
+  select(-n)
+
+df <- df %>% 
+  left_join(sessions)
+
+districts <- df %>%
+  select(state, district) %>% 
+  distinct() %>% 
+  arrange(state, district)
+```
+
+```{r}
+df %>% 
+  mutate(party = as.factor(party)) %>% 
+  filter(type == "sen",
+         !is.na(session),
+         session > 70) %>% 
+  #mutate(party = case_when(party != "Democrat" | party != "Republican" ~ "Other",
+  #                         party == "Democrat" ~ party,
+  #                         party == "Republican" ~ party)) %>% 
+  count(session, party) %>% 
+  ggplot(aes(session, n, fill = party)) +
+  geom_area() +
+  scale_fill_discrete(guide=FALSE)
+
+
+```
+
+
+
+```{r}
+df_pa <- df %>%
+  filter(type == "rep",
+         state == "PA") %>% 
+  select(start, session, type, state, district, party, id.wikipedia) %>% 
+  arrange(session, district) %>% 
+  complete(session, state, district)
+  #replace_na(list(district = "NA")) %>% 
+  #arrange(state, desc(district)) %>% 
+  #mutate(state_district = str_c(state, district),
+  #       state_district = as.factor(state_district)) %>% 
+
+df_pa %>% 
+  count(id.wikipedia, sort = TRUE)
+
+df_pa %>% 
+  #filter(session >= 100) %>% 
+  ggplot(aes(session, district, fill = party)) +
+  geom_tile() +
+  #guides(fill = FALSE) +
+  #theme(panel.grid.major.x = element_blank()) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0))
+```
