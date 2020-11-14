@@ -37,21 +37,21 @@ data <- read_csv("data/countypres_2000-2016.csv",
                  )) %>% 
   clean_names() %>% 
   rename(fips_raw = fips) %>% 
+  #filter out state-wide ballot collection
   filter(!(state == "Connecticut" & county == "Statewide writein")) %>% 
   filter(!(state == "Maine" & county == "Maine UOCAVA")) %>% 
   filter(!(state == "Rhode Island" & county == "Federal Precinct"))
 
 data %>% 
   filter(is.na(fips_raw)) %>% 
-  arrange(state, county, year) %>% 
-  View()
+  arrange(state, county, year)
 
 data %>% 
   filter(is.na(candidatevotes)) %>% 
-  arrange(state, county, year) %>% 
-  View()
+  distinct(state, county, year) %>% 
+  arrange(state, county, year)
 
-
+#filter for only 2-party vote in presidential elections
 data <- data %>% 
   filter(office == "President",
          party == "democrat" | party == "republican") %>% 
@@ -60,8 +60,8 @@ data <- data %>%
 
 data %>% 
   filter(is.na(candidatevotes)) %>% 
-  arrange(state, county, year) %>% 
-  View()
+  distinct(state, county, year) %>% 
+  arrange(state, county, year)
 
 glimpse(data)
 
@@ -78,7 +78,13 @@ data %>%
   mutate(fips = paste0("0", fips_raw)) %>% 
   distinct(fips_raw, fips)
 
+#decisions to make with wonky geometry
+#merge Shannnon and Oglala Lakota counties in SD
+#merge Kansas City Missouri and Jackson County Missouri
+#merge Bedford (city) fips 51515 with Bedford county 51019
+
 data <- data %>% 
+  #add "0" to front of states where leading "0" was dropped
   mutate(fips = case_when(state %in% states_with_bad_fips ~ paste0("0", fips_raw),
                           !(state %in% states_with_bad_fips) ~ fips_raw)) %>%
   #update Oglala Lakota SD fips
@@ -93,6 +99,11 @@ data <- data %>%
   #merge Bedford (city) fips 51515 with Bedford county 51019
   mutate(fips = case_when(state == "Virginia" & county == "Bedford" & fips == "51515" ~ "51019",
                           TRUE ~ fips))
+#Broomfield county 08014 separated from Boulder County 08013 in 2001
+# 
+# data <- data %>% 
+#   mutate(census_geo_year = case_when(year < 2010 ~ 2000,
+#                                      year >= 2010 ~ 2010))
 
 data %>% 
   filter(state %in% states_with_bad_fips) %>% 
@@ -102,32 +113,40 @@ data %>%
   filter(is.na(fips))
 
 data %>% 
-  filter(str_detect(county, "Lakota")) %>% 
+  filter(str_detect(county, "Lakota|Shannon"),
+         state == "South Dakota") %>% 
   distinct(state, county, fips)
 
+data %>% 
+  filter(state == "Virginia", county == "Bedford") %>% 
+  distinct(state, county, fips, year)
 
 county_geo <- get_acs(variables = "B19013_001",
-                      geography = "county", 
-                      geometry = TRUE,
-                      shift_geo = TRUE) %>% 
-  select(NAME, GEOID) %>% 
-  st_drop_geometry()
+                      geography = "county",
+                      geometry = FALSE) %>% 
+  #mutate(census_geo_year = 2010) %>% 
+  select(NAME, GEOID)
 
 data %>% 
-  filter(str_detect(county, "Lakota")) %>% 
+  filter(str_detect(county, "Lakota|Shannon"),
+         state == "South Dakota") %>% 
   distinct(state, county, fips)
 
 county_geo %>% 
-  filter(str_detect(NAME, "Lakota"))
+  filter(str_detect(NAME, "Lakota|Shannon"))
 
 data %>% 
   filter(state == "Virginia" & county == "Bedford") %>% 
   distinct(year, state, county, fips)
 
+#alaska falls out: this is expected
+#Broomfield County CO falls out for year 2000: was part of Boulder County in 2000
+#Oglala Lakota County SD falls out for year 2000: was Shannon County in 2000
+#
 data %>% 
   select(year, state, county, fips) %>% 
   anti_join(county_geo, by = c("fips" = "GEOID")) %>% 
-  distinct(state)
+  View()
 
 #some counties have 4 records because of merging process
 data %>%

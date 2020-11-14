@@ -4,6 +4,7 @@ library(janitor)
 library(sf)
 library(tigris)
 library(tidycensus)
+library(rmapshaper)
 library(gganimate)
 library(hrbrthemes)
 library(geofacet)
@@ -21,7 +22,27 @@ theme_set(theme_ipsum())
 
 #county_geo <- counties(cb = TRUE)
 
-presidential_votes_shift <- read_csv("data/presidential_votes_shift.csv")
+presidential_votes_shift <- read_csv("data/presidential_votes_shift.csv",
+                                     col_types = cols(
+                                       year = col_double(),
+                                       state = col_character(),
+                                       county = col_character(),
+                                       fips = col_character(),
+                                       candidatevotes_sum_democrat = col_double(),
+                                       candidatevotes_sum_republican = col_double(),
+                                       pct_vote_democrat = col_double(),
+                                       pct_vote_republican = col_double(),
+                                       dem_margin_pct = col_double(),
+                                       dem_margin_votes = col_double(),
+                                       shift_pct = col_double(),
+                                       shift_votes = col_double()
+                                     ))
+
+presidential_votes_shift %>% 
+  distinct(state, county, fips, year) %>% 
+  filter(county == "Bedford",
+         state == "Virginia")
+
 
 presidential_votes_shift %>% 
   filter(is.na(dem_margin_pct)) %>% 
@@ -38,19 +59,27 @@ presidential_votes_shift %>%
   facet_wrap(~year)
 
 
-
 county_geo <- get_acs(variables = "B19013_001",
-                      geography = "county", 
-                      geometry = TRUE,
-                      shift_geo = TRUE) %>% 
+                                    geography = "county",
+                                    geometry = TRUE,
+                                    shift_geo = TRUE) %>% 
+  select(NAME, GEOID) %>% 
+  ms_simplify(keep_shapes = TRUE) %>% 
   mutate(center = map(geometry, st_centroid)) %>% 
-  #mutate(center = map(center, st_coordinates)) %>% 
   mutate(center_lon_x = map_dbl(center, 1),
          center_lat_y = map_dbl(center, 2)) 
 
+state_geo <- get_acs(variables = "B19013_001",
+                     geography = "state",
+                     geometry = TRUE,
+                     shift_geo = TRUE) %>% 
+  ms_simplify() %>% 
+  select(NAME, GEOID)
+
 county_geo %>% 
   ggplot() +
-  geom_sf() +
+  geom_sf(size = .1) + 
+  geom_sf(data = state_geo, size = .3, fill = NA) +
   geom_point(aes(center_lon_x, center_lat_y), color = "red", size = .1)
     
 
@@ -60,7 +89,8 @@ presidential_votes_shift <- presidential_votes_shift %>%
 
 presidential_votes_shift %>% 
   anti_join(county_geo, by = c("fips" = "GEOID")) %>% 
-  distinct(state)
+  distinct(state, county, fips) %>% 
+  View()
 
 
 presidential_votes_shift %>% 
@@ -106,9 +136,13 @@ shift_map %>%
   facet_wrap(~year) +
   theme_void()
 
+#
 shift_map %>% 
   ggplot() +
   geom_sf(size = .01) +
+  geom_sf(data = state_geo,
+          size = .2,
+          fill = NA) +
   geom_segment(aes(x = lng0, xend = lng1,
                    y = lat0, yend = lat1,
                    color = shift_pct),
@@ -119,12 +153,16 @@ shift_map %>%
   
   
 political_winds_static <- shift_map %>% 
+  filter(state != "Alaska") %>% 
   ggplot() +
   geom_sf(size = .01) +
+  geom_sf(data = filter(state_geo, !str_detect(NAME, "Alaska")),
+          size = .2,
+          fill = NA) +
   geom_segment(aes(x = lng0, xend = lng1,
                    y = lat0, yend = lat1,
                    color = shift_pct),
-               arrow = arrow(length = unit(0.03, "inches")), alpha = .9) +
+               arrow = arrow(length = unit(0.08, "inches")), alpha = 1) +
   scale_color_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0,
                         labels = percent,
                         guide = guide_colorbar(title.position = "top",
@@ -148,7 +186,7 @@ animate_state_shifts <- function(choose_state){
     geom_segment(aes(x = lng0, xend = lng1,
                      y = lat0, yend = lat1,
                      color = shift_pct),
-                 arrow = arrow(length = unit(0.03, "inches")), alpha = .9) +
+                 arrow = arrow(length = unit(0.08, "inches")), alpha = 1) +
     scale_color_gradient2(low="red", mid = "grey", high="blue", midpoint = 0) +
     theme_void() +
     transition_states(year) +
@@ -182,13 +220,16 @@ presidential_votes_shift %>%
 test_anim <- shift_map %>% 
   mutate(id = str_c(state, county, fips)) %>% 
   filter(state == "Pennsylvania") %>% 
-  ggplot(aes(group = id)) +
-  geom_sf(size = .3) +
+  ggplot() +
+  # geom_sf(aes(group = id),
+  #         size = .1) +
+  geom_sf(data = filter(state_geo, NAME != "Alaska"),
+          size = .2,
+          fill = NA) +
   geom_segment(aes(x = lng0, xend = lng1,
                    y = lat0, yend = lat1,
-                   color = shift_pct),
-               size = 1,
-               arrow = arrow(length = unit(0.03, "inches")), alpha = .9) +
+                   color = shift_pct, group = id),
+               arrow = arrow(length = unit(0.08, "inches")), alpha = 1) +
   scale_color_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0,
                         labels = percent,
                         guide = guide_colorbar(title.position = "top",
@@ -204,16 +245,19 @@ test_anim <- shift_map %>%
 test_anim
 
 tic()
-political_winds_anim <- shift_map
+political_winds_anim <- shift_map %>% 
+  filter(state != "Alaska") %>% 
   mutate(id = str_c(state, county, fips)) %>% 
   mutate(year = as.integer(year)) %>% 
-  ggplot(aes(group = id)) +
-  geom_sf(size = .3) +
+  ggplot() +
+  geom_sf(data = filter(state_geo, NAME != "Alaska"),
+          size = .2,
+          fill = NA) +
   geom_segment(aes(x = lng0, xend = lng1,
                    y = lat0, yend = lat1,
-                   color = shift_pct),
-               size = 1,
-               arrow = arrow(length = unit(0.03, "inches")), alpha = .9) +
+                   color = shift_pct, group = id),
+               size = 1.3,
+               arrow = arrow(length = unit(0.2, "inches")), alpha = 1) +
   scale_color_gradient2(low = "red", mid = "grey", high = "blue", midpoint = 0,
                         labels = percent,
                         guide = guide_colorbar(title.position = "top",
