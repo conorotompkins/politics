@@ -59,11 +59,19 @@ state_graph %>%
   arrange(desc(coeff))
 
 state_similarity_graph <- state_graph %>% 
-  #filter(coeff > .3) %>% 
-  as_tbl_graph(directed = FALSE) %>% 
+  filter(coeff > 0) %>% 
+  as_tbl_graph(directed = FALSE)
+
+
+"lgl"
+"kk"
+"mds"
+
+
+state_similarity_graph %>% 
   activate(edges) %>% 
-  filter(coeff > .3) %>% 
-  ggraph() +
+  #filter(coeff > .5) %>% 
+  ggraph("kk") +
   geom_edge_fan(aes(edge_color = coeff, 
                     edge_alpha = coeff,
                     edge_width = coeff)) +
@@ -80,3 +88,37 @@ state_similarity_graph <- state_graph %>%
        edge_width = "Similarity") +
   theme_void()
   
+state_similarity_graph
+
+kk_layout <- create_layout(graph = state_similarity_graph, layout = "kk") %>%
+  select(x, y)
+
+filtered_graph <- state_similarity_graph %>% 
+  activate(edges) %>% 
+  filter(coeff > .3)
+
+filtered_layout <- create_layout(graph = filtered_graph, layout = kk_layout)
+
+
+final_graph <- ggraph(filtered_layout) +
+  geom_edge_fan(aes(edge_color = coeff,
+                    edge_alpha = coeff,
+                    edge_width = coeff)) +
+  geom_node_point() +
+  geom_node_label(aes(label = name), repel = TRUE) +
+  scale_edge_color_viridis() +
+  scale_edge_alpha_continuous(range = c(0, .6)) +
+  scale_edge_width_continuous(range = c(.1, 4)) +
+  guides(edge_color = guide_edge_colorbar(order = 2),
+         edge_alpha = guide_legend(order = 1),
+         edge_width = guide_legend(order = 1)) +
+  labs(title = "State Similarity Scores",
+       subtitle = "Data from github.com/TheEconomist/us-potus-model",
+       edge_color = "Similarity",
+       edge_alpha = "Similarity",
+       edge_width = "Similarity",
+       caption = "@conor_tompkins") +
+  theme_void()
+
+ggsave(final_graph, filename = "output/images/state_correlation_network_graph.png",
+       width = 12, height = 12, dpi = 300)

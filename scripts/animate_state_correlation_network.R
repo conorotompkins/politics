@@ -3,7 +3,7 @@ library(gifski)
 
 state_graph
 
-filter_threshhold_list <- c(.3, 0)
+filter_threshhold_list <- c(0, .3)
 filter_threshhold_list[2]
 
 total <- filter_threshhold_list %>% 
@@ -41,13 +41,13 @@ combined_graph <- original_graph %>%
   
 combined_graph %>% 
   ggraph("stress") +
-  geom_edge_fan(aes(edge_color = coeff, 
+  geom_edge_fan(aes(#edge_color = coeff, 
                     edge_alpha = coeff,
                     edge_width = coeff)) +
   geom_node_point() +
   geom_node_label(aes(label = name), repel =  T) +
   facet_edges(~filter_threshhold) +
-  scale_edge_color_viridis() +
+  #scale_edge_color_viridis() +
   scale_edge_alpha_continuous(range = c(0, .6)) +
   scale_edge_width_continuous(range = c(.1, 4)) +
   guides(edge_color = guide_edge_colorbar(order = 2),
